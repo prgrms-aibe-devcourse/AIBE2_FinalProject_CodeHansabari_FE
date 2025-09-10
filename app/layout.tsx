@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { Noto_Sans_KR, Roboto } from 'next/font/google';
 import './globals.css';
 import { MswProvider, QueryProvider } from '@/app';
-import { CustomToast, Modal } from '@/shared';
+import { CustomToast, Modal, GlobalLoading } from '@/shared';
 import { Header } from '@/widgets';
 
 const notoSansKR = Noto_Sans_KR({
@@ -31,6 +31,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <head>
+        {/* eslint-disable-next-line @next/next/no-css-tags */}
+        <link rel="stylesheet" type="text/css" href="/XEIcon/xeicon.min.css" />
+      </head>
       <body className={`${notoSansKR.variable} ${roboto.variable} antialiased`}>
         <MswProvider>
           <QueryProvider>
@@ -38,6 +42,7 @@ export default function RootLayout({
             {children}
             <CustomToast />
             <Modal />
+            <GlobalLoading />
           </QueryProvider>
         </MswProvider>
       </body>
