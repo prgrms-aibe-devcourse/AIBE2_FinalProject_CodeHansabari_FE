@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { useModalStore, Button, Textarea } from '@/shared';
 import { CoverLetterListModal, useCoverLetterDetail } from '@/entities';
 import { useImproveCoverLetterMutation } from '@/features/improve-cover-letter';
-import { SaveCoverLetterButton } from '@/features/save-cover-letter';
+import { SaveCoverLetterButton } from '@/features';
 
 interface CoverLetterProps {
   id?: number;
@@ -185,6 +185,16 @@ export function CoverLetter({ id }: CoverLetterProps) {
       return;
     }
 
+    // 자기소개서 내용은 100~2000자 사이여야 함
+    if (text.length < 100) {
+      toast.error('최소 100자 이상 이어야 합니다.');
+      return;
+    }
+    if (text.length > MAX_LENGTH) {
+      toast.error(`최대 ${MAX_LENGTH}자 까지 작성할 수 있습니다.`);
+      return;
+    }
+
     // Step 1에서는 기본 프롬프트, Step 2에서는 커스텀 프롬프트 사용
     const promptToUse =
       currentStep === 1
@@ -238,7 +248,7 @@ export function CoverLetter({ id }: CoverLetterProps) {
     id && coverLetterDetail ? coverLetterDetail.title : 'AI 자기소개서 첨삭';
 
   return (
-    <div className="">
+    <div className="mt-10">
       <div className="mx-auto mb-20 flex max-w-7xl gap-8">
         {/* 좌측 스텝 인디케이터 */}
         <div className="w-64 flex-shrink-0">
@@ -547,18 +557,28 @@ export function CoverLetter({ id }: CoverLetterProps) {
                       />
 
                       <div className="flex gap-4">
-                        <Button
-                          onClick={analyzeResume}
-                          disabled={improveMutation.isPending || !text.trim()}
-                          variant="primary"
-                          size="md"
-                          loading={improveMutation.isPending}
-                          className="transform rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:bg-blue-700"
-                        >
-                          {improveMutation.isPending
-                            ? '분석 중...'
-                            : 'AI 첨삭 시작'}
-                        </Button>
+                        <div className="group">
+                          <Button
+                            onClick={analyzeResume}
+                            disabled={improveMutation.isPending || !text.trim()}
+                            variant="primary"
+                            size="md"
+                            loading={improveMutation.isPending}
+                            className="relative transform rounded-lg bg-blue-600 px-6 py-3 font-semibold text-white shadow-md transition-all duration-200 hover:scale-105 hover:bg-blue-700"
+                          >
+                            {improveMutation.isPending
+                              ? '분석 중...'
+                              : 'AI 첨삭 시작'}
+                            <div className="pointer-events-none absolute top-full right-0 mt-2 w-40 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                              <div className="rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg">
+                                예상 사용 토큰:{' '}
+                                <span className="font-medium">5</span>개
+                              </div>
+                              {/* 화살표 */}
+                              <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 bg-gray-800"></div>
+                            </div>
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -642,17 +662,30 @@ export function CoverLetter({ id }: CoverLetterProps) {
                           className="rounded-xl border-blue-200 focus:border-blue-500 focus:ring-blue-500"
                         />
                         <div className="flex gap-3">
-                          <Button
-                            onClick={analyzeResume}
-                            disabled={improveMutation.isPending || !text.trim()}
-                            variant="primary"
-                            loading={improveMutation.isPending}
-                            className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:bg-blue-700"
-                          >
-                            {improveMutation.isPending
-                              ? '재분석 중...'
-                              : '추가 개선하기'}
-                          </Button>
+                          <div className="group relative">
+                            <Button
+                              onClick={analyzeResume}
+                              disabled={
+                                improveMutation.isPending || !text.trim()
+                              }
+                              variant="primary"
+                              loading={improveMutation.isPending}
+                              className="rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-lg transition-all duration-200 hover:bg-blue-700"
+                            >
+                              {improveMutation.isPending
+                                ? '재분석 중...'
+                                : '추가 개선하기'}
+                            </Button>
+
+                            <div className="pointer-events-none absolute top-full right-0 mt-2 w-40 opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                              <div className="rounded-lg bg-gray-800 px-3 py-2 text-xs text-white shadow-lg">
+                                예상 사용 토큰:{' '}
+                                <span className="font-medium">5</span>개
+                              </div>
+                              {/* 화살표 */}
+                              <div className="absolute -top-1 right-4 h-2 w-2 rotate-45 bg-gray-800"></div>
+                            </div>
+                          </div>
                           <Button
                             onClick={() => setCustomPrompt('')}
                             variant="secondary"

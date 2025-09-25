@@ -1,17 +1,28 @@
-import { coverLetterHandlers } from '@/entities';
-import { resumeHandlers } from '@/entities/resume';
-import { interviewQuestionsHandlers } from '@/entities/interviewQuestions';
-import { loginGoogleHandler } from '@/features';
-import { improveCoverLetterHandlers } from '@/features/improve-cover-letter';
-import { saveCoverLetterHandler } from '@/features/save-cover-letter';
-import { aiSuggestResumeHandlers } from '@/features/ai-suggest-resume';
+import {
+  adminHandlers,
+  coverLetterEntitiesHandlers,
+  coverLetterHandlers,
+  interviewQuestionsHandlers,
+  resumeHandlers,
+  userHandlers,
+} from '@/entities';
+
+import {
+  improveCoverLetterHandlers,
+  loginGoogleHandler,
+  saveCoverLetterHandler,
+} from '@/features';
+import { coverLetterFeaturesHandlers } from '@/features';
 
 export const handlers = [
   ...coverLetterHandlers,
+  ...coverLetterFeaturesHandlers,
+  ...coverLetterEntitiesHandlers,
   ...resumeHandlers,
   ...interviewQuestionsHandlers,
   ...improveCoverLetterHandlers,
   ...saveCoverLetterHandler,
-  ...aiSuggestResumeHandlers,
   ...loginGoogleHandler,
+  ...userHandlers,
+  ...adminHandlers,
 ];

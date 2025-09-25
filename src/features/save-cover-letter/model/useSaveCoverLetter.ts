@@ -18,6 +18,7 @@ interface SaveCoverLetterResponse {
 export const useSaveCoverLetter = () => {
   return useCustomMutation<SaveCoverLetterRequest, SaveCoverLetterResponse>({
     mutationFn: (requestData) => saveCoverLetter(requestData),
-    successMessage: '원본 자소서가 저장되었습니다.',
+    invalidateQueryKeys: [['coverLetters', 'list']],
+    loadingType: 'none',
   });
 };

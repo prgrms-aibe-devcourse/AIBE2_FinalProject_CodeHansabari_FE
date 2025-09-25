@@ -5,6 +5,22 @@ import {
 } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { useLoadingStore } from '@/shared';
+import { fetchUsageToken } from '@/entities/user/api';
+
+// 범용 레코드 타입 (any 사용 금지 대응)
+type UnknownRecord = Record<string, unknown>;
+
+// API 에러 형태 정의
+export interface ApiError {
+  status?: number;
+  message?: string;
+  error?: string;
+  errorCode?: string;
+  timestamp?: string;
+  errors?: Record<string, string | string[]>;
+  body?: UnknownRecord; // clientFetch에서 err.body로 던지는 경우 지원
+  [key: string]: unknown;
+}
 
 interface UseCustomMutationArgs<TVariables, TResult, TError> {
   mutationFn: (variables: TVariables) => Promise<TResult>;
@@ -12,13 +28,16 @@ interface UseCustomMutationArgs<TVariables, TResult, TError> {
   mutationOptions?: UseMutationOptions<TResult, TError, TVariables>;
   successMessage?: string;
   loadingType?: 'toast' | 'global' | 'none'; // 로딩 표시 방식 선택
+  requireTokenCheck?: boolean; // if true, perform a preflight token check before mutation
+  tokenPreflightStrategy?: 'cache' | 'fresh'; // 'cache' uses cached usageTokens, 'fresh' fetches latest
+  usageToken?: number;
 }
 
 interface MutationContext {
   toastId?: string;
 }
 
-export const useCustomMutation = <TVariables, TResult, TError = Error>(
+export const useCustomMutation = <TVariables, TResult, TError = ApiError>(
   args: UseCustomMutationArgs<TVariables, TResult, TError>,
 ) => {
   const queryClient = useQueryClient();
@@ -29,10 +48,53 @@ export const useCustomMutation = <TVariables, TResult, TError = Error>(
     mutationOptions,
     successMessage,
     loadingType = 'toast', // 기본값은 toast
+    requireTokenCheck = false,
+    tokenPreflightStrategy = 'cache',
+    usageToken = 1,
   } = args;
 
+  // wrap the provided mutationFn to run an optional preflight token check
+  const wrappedMutationFn = async (variables: TVariables) => {
+    if (requireTokenCheck && loadingType === 'global') {
+      try {
+        const cached = queryClient.getQueryData<any>(['usageTokens']);
+        let remaining: number | null = null;
+        if (tokenPreflightStrategy === 'cache') {
+          if (
+            cached &&
+            cached.data &&
+            typeof cached.data.remainingTokens === 'number'
+          ) {
+            remaining = cached.data.remainingTokens;
+          } else if (cached && typeof cached.remainingTokens === 'number') {
+            // support earlier select behavior where select returns inner data
+            remaining = cached.remainingTokens;
+          }
+          // if cache miss, fallback to fresh check
+          if (remaining == null) {
+            const fresh = await fetchUsageToken();
+            remaining = fresh?.data?.remainingTokens ?? 0;
+          }
+        } else {
+          // fresh fetch
+          const fresh = await fetchUsageToken();
+          remaining = fresh?.data?.remainingTokens ?? 0;
+        }
+
+        if (typeof remaining !== 'number' || remaining < usageToken) {
+          throw new Error('토큰이 부족합니다.');
+        }
+      } catch (e) {
+        // rethrow to allow useMutation onError handling to show toast
+        throw e;
+      }
+    }
+
+    return mutationFn(variables);
+  };
+
   return useMutation<TResult, TError, TVariables, MutationContext>({
-    mutationFn,
+    mutationFn: wrappedMutationFn,
     ...mutationOptions,
     onMutate: (variables) => {
       // 기존 onMutate가 있다면 실행
@@ -72,33 +134,47 @@ export const useCustomMutation = <TVariables, TResult, TError = Error>(
         mutationOptions.onError(error, variables, context);
       }
 
-      // 서버 에러 응답 형식에 맞게 메시지 추출
+      // 서버 에러 응답 형식에서 message만 추출하여 표시
       let errorMessage = '알 수 없는 에러입니다';
+      const errAny = error as unknown as ApiError | UnknownRecord;
 
-      if (error && typeof error === 'object') {
-        const errorObj = error as Record<string, unknown>;
-
-        // 서버에서 오는 구체적인 메시지 우선 사용
-        if (errorObj.message && typeof errorObj.message === 'string') {
-          errorMessage = errorObj.message;
-        }
-        // 상태 코드별 특별 처리
-        else if (typeof errorObj.status === 'number') {
-          if (errorObj.status === 429) {
-            errorMessage =
-              '사용 한도를 초과했습니다. 잠시 후 다시 시도해주세요.';
-          } else if (errorObj.status === 401) {
-            errorMessage = '인증이 필요합니다. 다시 로그인해주세요.';
-          } else if (errorObj.status === 403) {
-            errorMessage = '권한이 없습니다.';
-          } else if (errorObj.status >= 500) {
-            errorMessage =
-              '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.';
-          }
-        }
+      // support different thrown shapes: parsed body thrown directly, or Error with body
+      let candidateBody: unknown;
+      if (errAny && typeof errAny === 'object' && errAny !== null) {
+        // prefer explicit body field if present
+        candidateBody =
+          'body' in errAny && (errAny as ApiError).body
+            ? (errAny as ApiError).body
+            : errAny;
       }
 
-      // 로딩 타입에 따른 에러 처리
+      if (candidateBody != null) {
+        if (typeof candidateBody === 'string' && candidateBody.trim()) {
+          errorMessage = candidateBody;
+        } else if (typeof candidateBody === 'object') {
+          const cb = candidateBody as UnknownRecord;
+          if (typeof cb['message'] === 'string') {
+            errorMessage = String(cb['message']);
+          } else if (typeof cb['error'] === 'string') {
+            errorMessage = String(cb['error']);
+          } else if (cb['errors'] && typeof cb['errors'] === 'object') {
+            const errs = cb['errors'] as Record<string, unknown>;
+            const rawVals = Object.values(errs) as unknown[];
+            const flattened = (
+              rawVals.flat ? rawVals.flat() : rawVals
+            ) as unknown[];
+            errorMessage = flattened.map(String).join(', ');
+          }
+        }
+      } else if (
+        errAny &&
+        typeof errAny === 'object' &&
+        typeof (errAny as UnknownRecord)['message'] === 'string'
+      ) {
+        errorMessage = String((errAny as UnknownRecord)['message']);
+      }
+
+      // 로딩 타입에 따른 에러 처리 (토스트는 여기서만 출력)
       if (loadingType === 'toast') {
         toast.error(errorMessage, { id: context?.toastId });
       } else if (loadingType === 'global') {

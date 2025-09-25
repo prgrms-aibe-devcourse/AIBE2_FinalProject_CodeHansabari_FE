@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useUserMe } from '@/entities/user/model/query/useUserMe';
 import { useUserStore } from '@/shared';
 import { GoogleLoginButton, LogoutButton } from '@/features';
@@ -10,6 +11,7 @@ interface UserInfoProps {
 }
 
 export function UserInfo({ className }: UserInfoProps) {
+  const router = useRouter();
   const { isLoading } = useUserMe();
   const { user, isAuthenticated } = useUserStore();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -17,9 +19,10 @@ export function UserInfo({ className }: UserInfoProps) {
   // 로딩 중일 때는 스켈레톤 표시
   if (isLoading) {
     return (
+      // 로그인 버튼과 동일한 높이/모양의 스켈레톤을 사용해서 레이아웃 점프를 방지합니다.
       <div className={className}>
         <div className="animate-pulse">
-          <div className="h-8 w-8 rounded-full bg-gray-200"></div>
+          <div className="h-[52px] w-32 rounded-full bg-gray-200"></div>
         </div>
       </div>
     );
@@ -79,7 +82,20 @@ export function UserInfo({ className }: UserInfoProps) {
               <p className="text-sm font-medium text-gray-900">{user.name}</p>
               <p className="text-xs text-gray-500">{user.email}</p>
             </div>
-            <div className="p-2">
+            <div className="space-y-1 p-2">
+              {/* 관리자 권한이 있는 경우 관리자 페이지로 이동하는 버튼 노출 */}
+              {user.role && user.role !== 'USER' && (
+                <button
+                  onClick={() => {
+                    setIsDropdownOpen(false);
+                    router.push('/admin/users');
+                  }}
+                  className="w-full rounded-md px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  관리자 페이지
+                </button>
+              )}
+
               <LogoutButton className="w-full rounded-md px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50" />
             </div>
           </div>
